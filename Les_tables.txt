@@ -1,0 +1,33 @@
+CREATE TABLE Utilisateurs (
+    ID_Utilisateur INT PRIMARY KEY,
+    Nom_Utilisateur VARCHAR(25),
+    Mot_de_Passe VARCHAR(50),
+    Alias VARCHAR(50) UNIQUE,
+    Statut VARCHAR(50)
+);
+
+
+CREATE TABLE Salons (
+    ID_Salon INT PRIMARY KEY,
+    Nom_Salon VARCHAR(50)
+);
+
+
+CREATE TABLE Utilisateurs_Salons (
+    ID_Utilisateur_Salon INT PRIMARY KEY,
+    ID_Utilisateur INT,
+    ID_Salon INT,
+    FOREIGN KEY (ID_Utilisateur) REFERENCES Utilisateurs(ID_Utilisateur),
+    FOREIGN KEY (ID_Salon) REFERENCES Salons(ID_Salon)
+);
+
+
+CREATE TABLE Messages (
+    ID_Message INT PRIMARY KEY,
+    ID_Utilisateur INT,
+    ID_Salon INT,
+    Contenu_Message TEXT,
+    Date_Heure_Envoi DATETIME,
+    FOREIGN KEY (ID_Utilisateur) REFERENCES Utilisateurs(ID_Utilisateur),
+    FOREIGN KEY (ID_Salon) REFERENCES Salons(ID_Salon)
+);
