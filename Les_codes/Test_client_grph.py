@@ -1,67 +1,60 @@
 import sys
-import threading
 import socket
+import threading
 from PyQt6.QtWidgets import *
+from PyQt6.QtCore import *
 
 
 class LoginWidget(QWidget):
     def __init__(self, parent, client_gui):
         super().__init__()
 
-        self.client_gui = client_gui
-
         self.username_input = QLineEdit(self)
         self.password_input = QLineEdit(self)
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
 
         self.login_button = QPushButton("Se Connecter", self)
-        self.login_button.clicked.connect(self.client_gui.show_chat)
-        
+        self.login_button.clicked.connect(client_gui.show_chat)
+
         self.signup_button = QPushButton("Créer un Compte", self)
-        self.signup_button.clicked.connect(self.show_signup)
+        self.signup_button.clicked.connect(client_gui.show_signup)
 
         self.quit_button = QPushButton("Quitter", self)
-        self.quit_button.clicked.connect(self.client_gui.close)
+        self.quit_button.clicked.connect(client_gui.close)
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Nom d'utilisateur:"))
-        layout.addWidget(self.username_input)
-        layout.addWidget(QLabel("Mot de passe:"))
-        layout.addWidget(self.password_input)
-        layout.addWidget(self.login_button)
-        layout.addWidget(self.signup_button)
-        layout.addWidget(self.quit_button)
-
-    def show_signup(self):
-        self.client_gui.stacked_widget.setCurrentIndex(1)
+        layout = QGridLayout(self)
+        layout.addWidget(QLabel("Nom d'utilisateur:"), 0, 0)
+        layout.addWidget(self.username_input, 0, 1)
+        layout.addWidget(QLabel("Mot de passe:"), 1, 0)
+        layout.addWidget(self.password_input, 1, 1)
+        layout.addWidget(self.login_button, 2, 0, 1, 2)
+        layout.addWidget(self.signup_button, 3, 0, 1, 2)
+        layout.addWidget(self.quit_button, 4, 0, 1, 2)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
 
 class SignupWidget(QWidget):
     def __init__(self, parent, client_gui):
         super().__init__()
 
-        self.client_gui = client_gui
-
         self.username_input = QLineEdit(self)
         self.password_input = QLineEdit(self)
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
 
         self.signup_button = QPushButton("Créer un Compte", self)
-        self.signup_button.clicked.connect(self.client_gui.show_chat)
+        self.signup_button.clicked.connect(client_gui.show_chat)
 
         self.back_button = QPushButton("Retour", self)
-        self.back_button.clicked.connect(self.show_login)
+        self.back_button.clicked.connect(client_gui.show_login)
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Nom d'utilisateur:"))
-        layout.addWidget(self.username_input)
-        layout.addWidget(QLabel("Mot de passe:"))
-        layout.addWidget(self.password_input)
-        layout.addWidget(self.signup_button)
-        layout.addWidget(self.back_button)
-
-    def show_login(self):
-        self.client_gui.stacked_widget.setCurrentIndex(0)
+        layout = QGridLayout(self)
+        layout.addWidget(QLabel("Nom d'utilisateur:"), 0, 0)
+        layout.addWidget(self.username_input, 0, 1)
+        layout.addWidget(QLabel("Mot de passe:"), 1, 0)
+        layout.addWidget(self.password_input, 1, 1)
+        layout.addWidget(self.signup_button, 2, 0, 1, 2)
+        layout.addWidget(self.back_button, 3, 0, 1, 2)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
 
 class ClientGUI(QWidget):
@@ -69,21 +62,24 @@ class ClientGUI(QWidget):
         super().__init__()
 
         self.setWindowTitle("Client")
-        self.setGeometry(100, 100, 1000, 800)
+        self.setGeometry(100, 100, 400, 300)
 
         self.stacked_widget = QStackedWidget(self)
         self.login_widget = LoginWidget(self, self)
         self.signup_widget = SignupWidget(self, self)
         self.chat_widget = QWidget(self)
-        self.chat_layout = QVBoxLayout(self.chat_widget)
+
+        self.chat_layout = QGridLayout(self.chat_widget)
         self.text_display = QTextEdit(self.chat_widget)
         self.text_display.setReadOnly(True)
         self.input_box = QLineEdit(self.chat_widget)
         self.send_button = QPushButton("Envoyer", self.chat_widget)
         self.send_button.clicked.connect(self.send_message)
-        self.chat_layout.addWidget(self.text_display)
-        self.chat_layout.addWidget(self.input_box)
-        self.chat_layout.addWidget(self.send_button)
+        self.chat_layout.addWidget(self.text_display, 0, 0)
+        self.chat_layout.addWidget(self.input_box, 1, 0)
+        self.chat_layout.addWidget(self.send_button, 2, 0)
+        self.chat_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         self.stacked_widget.addWidget(self.login_widget)
         self.stacked_widget.addWidget(self.signup_widget)
         self.stacked_widget.addWidget(self.chat_widget)
