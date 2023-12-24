@@ -3,31 +3,6 @@ import socket
 import threading
 from PyQt6.QtWidgets import *
 
-class LoginDialog(QDialog):
-    def __init__(self):
-        super().__init__()
-
-        self.setWindowTitle("Authentification")
-        self.setGeometry(300, 300, 400, 150)
-
-        self.username_label = QLabel("Nom d'utilisateur:")
-        self.username_input = QLineEdit()
-
-        self.password_label = QLabel("Mot de passe:")
-        self.password_input = QLineEdit()
-        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-
-        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        self.buttons.accepted.connect(self.accept)
-        self.buttons.rejected.connect(self.reject)
-
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.username_label)
-        layout.addWidget(self.username_input)
-        layout.addWidget(self.password_label)
-        layout.addWidget(self.password_input)
-        layout.addWidget(self.buttons)
-
 class ClientGUI(QWidget):
     def __init__(self):
         super().__init__()
@@ -43,16 +18,14 @@ class ClientGUI(QWidget):
         self.send_button = QPushButton("Envoyer", self)
         self.send_button.clicked.connect(self.send_message)
 
-        self.login_dialog = LoginDialog()
-
         self.create_account_button = QPushButton("Créer un compte", self)
-        self.create_account_button.clicked.connect(self.show_create_account_dialog)
+        self.create_account_button.clicked.connect(self.create_account)
 
-        self.authenticate_button = QPushButton("Se connecter", self)
-        self.authenticate_button.clicked.connect(self.show_authenticate_dialog)
+        self.authenticate_button = QPushButton("Authentifier", self)
+        self.authenticate_button.clicked.connect(self.authenticate)
 
         self.quit_button = QPushButton("Quitter", self)
-        self.quit_button.clicked.connect(self.disconnect_from_server)
+        self.quit_button.clicked.connect(self.quit_application)
 
         layout = QGridLayout(self)
         layout.addWidget(self.text_display, 0, 0, 1, 4)
@@ -78,17 +51,18 @@ class ClientGUI(QWidget):
         self.client_socket.send(message.encode())
         self.input_box.clear()
 
-    def show_create_account_dialog(self):
-        result = self.login_dialog.exec()
-        if result == QDialog.DialogCode.Accepted:
-            # Envoyer la commande au serveur pour créer un compte
-            self.client_socket.send("CREATE_ACCOUNT".encode())
+    def create_account(self):
+        # Envoyer la commande au serveur pour créer un compte
+        self.client_socket.send("CREATE_ACCOUNT".encode())
 
-    def show_authenticate_dialog(self):
-        result = self.login_dialog.exec()
-        if result == QDialog.DialogCode.Accepted:
-            # Envoyer la commande au serveur pour s'authentifier
-            self.client_socket.send("AUTHENTICATE".encode())
+    def authenticate(self):
+        # Envoyer la commande au serveur pour s'authentifier
+        self.client_socket.send("AUTHENTICATE".encode())
+
+    def quit_application(self):
+        # Envoyer la commande au serveur pour quitter
+        self.client_socket.send("QUIT".encode())
+        self.close()
 
     def receive_messages(self):
         while True:
@@ -106,14 +80,6 @@ class ClientGUI(QWidget):
             except Exception as e:
                 self.text_display.append(f"Erreur de réception de message")
                 break
-
-    def disconnect_from_server(self):
-        try:
-            self.client_socket.close()
-            self.text_display.append("Déconnecté du serveur.")
-        except Exception as e:
-            self.text_display.append(f"Erreur lors de la déconnexion du serveur.")
-        self.close()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

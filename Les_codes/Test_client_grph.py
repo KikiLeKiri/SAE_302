@@ -21,11 +21,11 @@ class ClientGUI(QWidget):
         self.create_account_button = QPushButton("Créer un compte", self)
         self.create_account_button.clicked.connect(self.create_account)
 
-        self.authenticate_button = QPushButton("Authentifier", self)
+        self.authenticate_button = QPushButton("Se connceter", self)
         self.authenticate_button.clicked.connect(self.authenticate)
 
         self.quit_button = QPushButton("Quitter", self)
-        self.quit_button.clicked.connect(self.quit_application)
+        self.quit_button.clicked.connect(self.disconnect_from_server)
 
         layout = QGridLayout(self)
         layout.addWidget(self.text_display, 0, 0, 1, 4)
@@ -59,11 +59,6 @@ class ClientGUI(QWidget):
         # Envoyer la commande au serveur pour s'authentifier
         self.client_socket.send("AUTHENTICATE".encode())
 
-    def quit_application(self):
-        # Envoyer la commande au serveur pour quitter
-        self.client_socket.send("QUIT".encode())
-        self.close()
-
     def receive_messages(self):
         while True:
             try:
@@ -80,6 +75,15 @@ class ClientGUI(QWidget):
             except Exception as e:
                 self.text_display.append(f"Erreur de réception de message")
                 break
+
+    # Fermer la connexion au serveur
+    def disconnect_from_server(self):
+        try:
+            self.client_socket.close()
+            self.text_display.append("Déconnecté du serveur.")
+        except Exception as e:
+            self.text_display.append(f"Erreur lors de la déconnexion du serveur.")
+        self.close()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

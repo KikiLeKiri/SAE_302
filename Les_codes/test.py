@@ -3,30 +3,33 @@ import socket
 import threading
 from PyQt6.QtWidgets import *
 
-class LoginDialog(QDialog):
+class AuthenticationDialog(QDialog):
     def __init__(self):
         super().__init__()
 
         self.setWindowTitle("Authentification")
-        self.setGeometry(300, 300, 400, 150)
-
-        self.username_label = QLabel("Nom d'utilisateur:")
-        self.username_input = QLineEdit()
-
-        self.password_label = QLabel("Mot de passe:")
-        self.password_input = QLineEdit()
-        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-
-        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        self.buttons.accepted.connect(self.accept)
-        self.buttons.rejected.connect(self.reject)
+        self.setGeometry(300, 300, 300, 150)
 
         layout = QVBoxLayout(self)
+
+        self.username_label = QLabel("Nom d'utilisateur:", self)
+        self.username_input = QLineEdit(self)
+
+        self.password_label = QLabel("Mot de passe:", self)
+        self.password_input = QLineEdit(self)
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+
+        self.login_button = QPushButton("Se connecter", self)
+        self.login_button.clicked.connect(self.accept)
+
         layout.addWidget(self.username_label)
         layout.addWidget(self.username_input)
         layout.addWidget(self.password_label)
         layout.addWidget(self.password_input)
-        layout.addWidget(self.buttons)
+        layout.addWidget(self.login_button)
+
+    def get_credentials(self):
+        return self.username_input.text(), self.password_input.text()
 
 class ClientGUI(QWidget):
     def __init__(self):
@@ -43,13 +46,11 @@ class ClientGUI(QWidget):
         self.send_button = QPushButton("Envoyer", self)
         self.send_button.clicked.connect(self.send_message)
 
-        self.login_dialog = LoginDialog()
-
         self.create_account_button = QPushButton("Créer un compte", self)
-        self.create_account_button.clicked.connect(self.show_create_account_dialog)
+        self.create_account_button.clicked.connect(self.create_account)
 
         self.authenticate_button = QPushButton("Se connecter", self)
-        self.authenticate_button.clicked.connect(self.show_authenticate_dialog)
+        self.authenticate_button.clicked.connect(self.authenticate)
 
         self.quit_button = QPushButton("Quitter", self)
         self.quit_button.clicked.connect(self.disconnect_from_server)
@@ -78,17 +79,21 @@ class ClientGUI(QWidget):
         self.client_socket.send(message.encode())
         self.input_box.clear()
 
-    def show_create_account_dialog(self):
-        result = self.login_dialog.exec()
-        if result == QDialog.DialogCode.Accepted:
-            # Envoyer la commande au serveur pour créer un compte
-            self.client_socket.send("CREATE_ACCOUNT".encode())
+    def create_account(self):
+        # Envoyer la commande au serveur pour créer un compte
+        self.client_socket.send("CREATE_ACCOUNT".encode())
 
-    def show_authenticate_dialog(self):
-        result = self.login_dialog.exec()
+    def authenticate(self):
+        # Utiliser la fenêtre de dialogue pour obtenir les informations d'authentification
+        auth_dialog = AuthenticationDialog()
+        result = auth_dialog.exec()
+
         if result == QDialog.DialogCode.Accepted:
-            # Envoyer la commande au serveur pour s'authentifier
-            self.client_socket.send("AUTHENTICATE".encode())
+            username, password = auth_dialog.get_credentials()
+
+            # Envoyer la commande au serveur pour s'authentifier avec le nom d'utilisateur et le mot de passe
+            self.client_socket.send(f"AUTHENTICATE|{username}|{password}".encode())
+
 
     def receive_messages(self):
         while True:

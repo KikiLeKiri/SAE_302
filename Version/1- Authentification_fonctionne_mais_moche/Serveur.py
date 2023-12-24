@@ -36,7 +36,7 @@ def acceuil_client(conn, address):
 
     while not Flag and username is None:
         try:
-            conn.send("Veuillez vous connecter ou créer un compte.\n".encode())
+            conn.send("Veuillez vous authentifier ou créer un compte.\n".encode())
 
             message = conn.recv(1024).decode()
             command_parts = message.split("|")
@@ -50,11 +50,7 @@ def acceuil_client(conn, address):
                     conn.send("CREATE_ACCOUNT_FAILURE".encode())
             elif command_parts[0] == 'AUTHENTICATE':
                 # Authentification
-                username, password = command_parts[1], command_parts[2]
-                if is_valid_password(username, password):
-                    conn.send("Connection réussie".encode())
-                else:
-                    conn.send("Il y a eu un problème lors de votre connexion au serveur\nVeuillez réessayer".encode())
+                username = authenticate_user(conn)
             elif command_parts[0] == 'QUIT':
                 # Quitter
                 conn.send("Déconnexion demandée.".encode())
@@ -72,7 +68,7 @@ def acceuil_client(conn, address):
 
     if username is not None:
         authenticated_clients[username] = conn
-        conn.send("Bienvenue sur Discussion, votre serveur de discussion interne !".encode())
+        conn.send("Authentification réussie. Bienvenue!".encode())
 
         while not Flag:
             try:
@@ -87,7 +83,7 @@ def acceuil_client(conn, address):
                     print("Client a demandé l'arrêt du serveur.")
                     conn.send("Arrêt du serveur.".encode())
                     conn.close()
-                    schedule_server_shutdown()
+                    os._exit(0)
                 elif message.lower() == 'bye':
                     print(f"Le client {username} a demandé à se déconnecter.")
                     conn.send("Déconnexion demandée.".encode())
@@ -225,68 +221,13 @@ def save_user_to_database(username, password):
 def Communication(message, sender_conn, username):
     active_clients = list(authenticated_clients.values())
 
-    # Analyser la commande du message
-    command_parts = message.split(" ")
-    command = command_parts[0].lower()
-
-    # Traiter la commande
-    if command == 'kick':
-        if len(command_parts) == 2:
-            target_username = command_parts[1].replace('@', '')
-            kick_user(target_username, sender_conn)
-        else:
-            sender_conn.send("Commande invalide. Format attendu : 'kick @username'".encode())
-
-    elif command == 'ban':
-        # Ajoutez ici le code pour traiter la commande 'ban'
-        pass
-
-    elif command == 'kill':
-        # Planifier l'arrêt du serveur
-        schedule_server_shutdown()
-
-    else:
-        # Envoyer le message aux clients
-        for client_conn in active_clients:
-            if client_conn != sender_conn:
-                try:
-                    client_conn.send(f"{username}: {message}".encode())
-                except Exception as e:
-                    print(f"Erreur d'envoi de message à un client: {e}")
-                    authenticated_clients.pop(username, None)
-
-def kick_user(target_username, sender_conn):
-    # Vérifier si l'utilisateur cible est connecté
-    if target_username in authenticated_clients:
-        target_conn = authenticated_clients[target_username]
-        target_conn.send("Vous avez été expulsé du serveur.".encode())
-        target_conn.close()
-        clients.remove(target_conn)
-        authenticated_clients.pop(target_username, None)
-    else:
-        # Envoyer un message d'erreur au demandeur
-        sender_conn.send(f"L'utilisateur {target_username} n'est pas connecté.".encode())
-
-def schedule_server_shutdown():
-    # Planifier l'arrêt du serveur après 15 secondes
-    print("Le serveur va s'arrêter dans 15 secondes.")
-    broadcast_to_clients("Le serveur va s'arrêter dans 15 secondes.")
-    timer = threading.Timer(15, shutdown_server)
-    timer.start()
-
-def shutdown_server():
-    # Arrêt du serveur
-    print("Arrêt du serveur.")
-    broadcast_to_clients("Le serveur s'arrête maintenant.")
-    os._exit(0)
-
-def broadcast_to_clients(message):
-    # Envoyer le message à tous les clients
-    for client_conn in authenticated_clients.values():
-        try:
-            client_conn.send(f"Serveur: {message}".encode())
-        except Exception as e:
-            print(f"Erreur d'envoi de message à un client: {e}")
+    for client_conn in active_clients:
+        if client_conn != sender_conn:
+            try:
+                client_conn.send(f"{username}: {message}".encode())
+            except Exception as e:
+                print(f"Erreur d'envoi de message à un client: {e}")
+                authenticated_clients.pop(username, None)
 
 if __name__ == "__main__":
     start_server()
