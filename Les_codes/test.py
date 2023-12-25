@@ -2,7 +2,7 @@ import sys
 import socket
 import threading
 from PyQt6 import QtCore
-from PyQt6.QtWidgets import *
+from PyQt6.QtWidgets import QApplication, QWidget, QTextEdit, QLineEdit, QPushButton, QVBoxLayout, QGridLayout, QLabel, QDialog
 
 class AuthenticationDialog(QDialog):
     def __init__(self):
@@ -34,6 +34,8 @@ class AuthenticationDialog(QDialog):
 
 class ClientGUI(QWidget):
     close_signal = QtCore.pyqtSignal()
+    ban_signal = QtCore.pyqtSignal()
+
     def __init__(self):
         super().__init__()
 
@@ -96,7 +98,6 @@ class ClientGUI(QWidget):
             # Envoyer la commande au serveur pour s'authentifier avec le nom d'utilisateur et le mot de passe
             self.client_socket.send(f"AUTHENTICATE|{username}|{password}".encode())
 
-
     def receive_messages(self):
         while True:
             try:
@@ -112,13 +113,17 @@ class ClientGUI(QWidget):
                     if "Le serveur s'arrête maintenant" in message:
                         # Émettre le signal pour fermer l'application
                         self.close_signal.emit()
+                elif message.startswith("Banni:"):
+                    # Le serveur indique que l'utilisateur est banni
+                    self.text_display.append("Vous avez été banni du serveur.")
+                    # Émettre le signal pour fermer l'application
+                    self.ban_signal.emit()
                 else:
                     self.text_display.append(message)
 
             except Exception as e:
                 self.text_display.append(f"Erreur de réception de message")
                 break
-
 
     def disconnect_from_server(self):
         try:
@@ -128,6 +133,10 @@ class ClientGUI(QWidget):
             self.text_display.append(f"Erreur lors de la déconnexion du serveur.")
         self.close()
 
+    def handle_ban(self):
+        # Fermer la fenêtre de discussion en cas de bannissement
+        self.close()
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     client_gui = ClientGUI()
@@ -135,5 +144,7 @@ if __name__ == "__main__":
 
     # Connecter le signal de fermeture au slot quit de l'application
     client_gui.close_signal.connect(app.quit)
+    # Connecter le signal de bannissement au slot handle_ban de l'application
+    client_gui.ban_signal.connect(client_gui.handle_ban)
 
     sys.exit(app.exec())

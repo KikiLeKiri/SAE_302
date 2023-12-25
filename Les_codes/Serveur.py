@@ -63,7 +63,13 @@ def acceuil_client(conn, address):
                 # Authentification
                 username, password = command_parts[1], command_parts[2]
                 if is_valid_password(username, password):
-                    conn.send("Connection réussi".encode())
+                    # Ajoutez cette vérification avant d'authentifier l'utilisateur
+                    if not is_user_banned(username):
+                        conn.send("Connection réussi".encode())
+                    else:
+                        conn.send("Vous êtes banni. Déconnexion.".encode())
+                        conn.close()
+                        Flag = True
                 else:
                     conn.send("Il y a eu un problème lors de votre conncetion au serveur\nVeuillez réessayez".encode())
             elif command_parts[0] == 'QUIT':
@@ -79,7 +85,13 @@ def acceuil_client(conn, address):
                 time.sleep(15)  # Attendre 15 secondes avant d'arrêter le serveur
                 os._exit(0)
             else:
-                conn.send("Commande non reconnue.".encode())
+                # Ajoutez cette vérification avant de traiter la commande
+                if not is_user_banned(username):
+                    conn.send("Commande non reconnue.".encode())
+                else:
+                    conn.send("Vous êtes banni. Déconnexion.".encode())
+                    conn.close()
+                    Flag = True
 
         except Exception as e:
             print(f"Le client {address} s'est déconnecté")
@@ -126,6 +138,12 @@ def authenticate_user(conn):
 
         # Vérifier l'existence de l'utilisateur dans la base de données
         if is_valid_user(username):
+            # Vérifier si l'utilisateur est banni
+            if is_user_banned(username):
+                conn.send("Vous êtes banni. Déconnexion.".encode())
+                conn.close()
+                return None
+
             conn.send("Mot de passe: ".encode())
             password = conn.recv(1024).decode()
 
@@ -215,6 +233,27 @@ def is_valid_password(username, password):
         print(f"Erreur lors de la vérification du mot de passe: {e}")
         return False
 
+def is_user_banned(username):
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_DATABASE
+        )
+
+        cursor = connection.cursor()
+        cursor.execute("SELECT Banni FROM Utilisateurs WHERE Nom_Utilisateur = %s", (username,))
+        result = cursor.fetchone()
+
+        cursor.close()
+        connection.close()
+
+        return result and result[0] == 1
+    except Error as e:
+        print(f"Erreur lors de la vérification du statut de bannissement de l'utilisateur {username}: {e}")
+        return False
+
 def save_user_to_database(username, password):
     # Enregistrer l'utilisateur dans la base de données
     try:
@@ -254,22 +293,27 @@ def Communication(message, sender_conn, username):
             sender_conn.send("Commande invalide. Format attendu : 'kick @username'".encode())
 
     elif command == 'ban':
-        # Ajoutez ici le code pour traiter la commande 'ban'
-        pass
+        if len(command_parts) == 2:
+            target_username = command_parts[1].replace('@', '')
+            ban_user(target_username)
+        else:
+            sender_conn.send("Commande invalide. Format attendu : 'ban @username'".encode())
 
     elif command == 'kill':
         # Planifier l'arrêt du serveur
         schedule_server_shutdown()
 
     else:
-        # Envoyer le message aux clients
-        for client_conn in active_clients:
-            if client_conn != sender_conn:
-                try:
-                    client_conn.send(f"{username}: {message}".encode())
-                except Exception as e:
-                    print(f"Erreur d'envoi de message à un client: {e}")
-                    authenticated_clients.pop(username, None)
+        # Ajoutez cette vérification avant d'envoyer le message aux clients
+        if not is_user_banned(username):
+            # Envoyer le message aux clients
+            for client_conn in active_clients:
+                if client_conn != sender_conn:
+                    try:
+                        client_conn.send(f"{username}: {message}".encode())
+                    except Exception as e:
+                        print(f"Erreur d'envoi de message à un client: {e}")
+                        authenticated_clients.pop(username, None)
 
 def kick_user(target_username, sender_conn):
     # Vérifier si l'utilisateur cible est connecté
@@ -282,6 +326,30 @@ def kick_user(target_username, sender_conn):
     else:
         # Envoyer un message d'erreur au demandeur
         sender_conn.send(f"L'utilisateur {target_username} n'est pas connecté.".encode())
+
+def ban_user(target_username):
+    # Mettez à jour la base de données pour marquer l'utilisateur comme banni
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_DATABASE
+        )
+
+        cursor = connection.cursor()
+        cursor.execute("UPDATE Utilisateurs SET Banni = TRUE WHERE Nom_Utilisateur = %s", (target_username,))
+        connection.commit()
+
+        cursor.close()
+        connection.close()
+
+        # Envoyer un message aux autres clients pour les informer du bannissement
+        message_to_send = f"Serveur: L'utilisateur {target_username} a été banni du serveur."
+        broadcast_to_clients(message_to_send)
+
+    except Error as e:
+        print(f"Erreur lors du bannissement de l'utilisateur: {e}")
 
 def schedule_server_shutdown():
     # Planifier l'arrêt du serveur après 15 secondes
@@ -297,10 +365,10 @@ def shutdown_server():
     os._exit(0)
 
 def broadcast_to_clients(message):
-    # Envoyer le message à tous les clients
-    for client_conn in authenticated_clients.values():
+    active_clients = list(authenticated_clients.values())
+    for client_conn in active_clients:
         try:
-            client_conn.send(f"Serveur: {message}".encode())
+            client_conn.send(message.encode())
         except Exception as e:
             print(f"Erreur d'envoi de message à un client: {e}")
 
