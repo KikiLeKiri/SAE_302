@@ -1,9 +1,39 @@
 import sys
 import socket
 import threading
+from PyQt6 import QtCore
 from PyQt6.QtWidgets import *
 
+class AuthenticationDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Authentification")
+        self.setGeometry(300, 300, 300, 150)
+
+        layout = QVBoxLayout(self)
+
+        self.username_label = QLabel("Nom d'utilisateur:", self)
+        self.username_input = QLineEdit(self)
+
+        self.password_label = QLabel("Mot de passe:", self)
+        self.password_input = QLineEdit(self)
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+
+        self.login_button = QPushButton("Se connecter", self)
+        self.login_button.clicked.connect(self.accept)
+
+        layout.addWidget(self.username_label)
+        layout.addWidget(self.username_input)
+        layout.addWidget(self.password_label)
+        layout.addWidget(self.password_input)
+        layout.addWidget(self.login_button)
+
+    def get_credentials(self):
+        return self.username_input.text(), self.password_input.text()
+
 class ClientGUI(QWidget):
+    close_signal = QtCore.pyqtSignal()
     def __init__(self):
         super().__init__()
 
@@ -21,7 +51,7 @@ class ClientGUI(QWidget):
         self.create_account_button = QPushButton("Créer un compte", self)
         self.create_account_button.clicked.connect(self.create_account)
 
-        self.authenticate_button = QPushButton("Se connceter", self)
+        self.authenticate_button = QPushButton("Se connecter", self)
         self.authenticate_button.clicked.connect(self.authenticate)
 
         self.quit_button = QPushButton("Quitter", self)
@@ -56,8 +86,16 @@ class ClientGUI(QWidget):
         self.client_socket.send("CREATE_ACCOUNT".encode())
 
     def authenticate(self):
-        # Envoyer la commande au serveur pour s'authentifier
-        self.client_socket.send("AUTHENTICATE".encode())
+        # Utiliser la fenêtre de dialogue pour obtenir les informations d'authentification
+        auth_dialog = AuthenticationDialog()
+        result = auth_dialog.exec()
+
+        if result == QDialog.DialogCode.Accepted:
+            username, password = auth_dialog.get_credentials()
+
+            # Envoyer la commande au serveur pour s'authentifier avec le nom d'utilisateur et le mot de passe
+            self.client_socket.send(f"AUTHENTICATE|{username}|{password}".encode())
+
 
     def receive_messages(self):
         while True:
@@ -69,6 +107,11 @@ class ClientGUI(QWidget):
                     self.text_display.append("Compte créé avec succès.")
                 elif message.startswith("CREATE_ACCOUNT_FAILURE"):
                     self.text_display.append("Erreur lors de la création du compte.")
+                elif message.startswith("Serveur:"):
+                    self.text_display.append(message)
+                    if "Le serveur s'arrête maintenant" in message:
+                        # Émettre le signal pour fermer l'application
+                        self.close_signal.emit()
                 else:
                     self.text_display.append(message)
 
@@ -76,7 +119,7 @@ class ClientGUI(QWidget):
                 self.text_display.append(f"Erreur de réception de message")
                 break
 
-    # Fermer la connexion au serveur
+
     def disconnect_from_server(self):
         try:
             self.client_socket.close()
@@ -89,4 +132,8 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     client_gui = ClientGUI()
     client_gui.show()
+
+    # Connecter le signal de fermeture au slot quit de l'application
+    client_gui.close_signal.connect(app.quit)
+
     sys.exit(app.exec())

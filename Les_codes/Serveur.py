@@ -3,6 +3,7 @@ import threading
 import os
 import mysql.connector
 from mysql.connector import Error
+import time
 
 DB_HOST = 'localhost'
 DB_USER = 'toto'
@@ -28,6 +29,16 @@ def start_server():
         client_thread = threading.Thread(target=acceuil_client, args=(conn, address))
         client_thread.start()
 
+    # Nouvelle commande pour annoncer l'arrêt du serveur
+    announce_shutdown("Le serveur va s'arrêter dans 15 secondes.")
+
+def announce_shutdown(message):
+    for client_conn in list(authenticated_clients.values()):
+        try:
+            client_conn.send(f"SHUTDOWN_ANNOUNCE|{message}".encode())
+        except Exception as e:
+            print(f"Erreur d'envoi d'annonce d'arrêt du serveur à un client: {e}")
+
 def acceuil_client(conn, address):
     Flag = False
     username = None
@@ -52,9 +63,9 @@ def acceuil_client(conn, address):
                 # Authentification
                 username, password = command_parts[1], command_parts[2]
                 if is_valid_password(username, password):
-                    conn.send("Connection réussie".encode())
+                    conn.send("Connection réussi".encode())
                 else:
-                    conn.send("Il y a eu un problème lors de votre connexion au serveur\nVeuillez réessayer".encode())
+                    conn.send("Il y a eu un problème lors de votre conncetion au serveur\nVeuillez réessayez".encode())
             elif command_parts[0] == 'QUIT':
                 # Quitter
                 conn.send("Déconnexion demandée.".encode())
@@ -62,6 +73,11 @@ def acceuil_client(conn, address):
                 clients.remove(conn)
                 authenticated_clients.pop(username, None)
                 Flag = True
+            elif command_parts[0] == 'SHUTDOWN_ANNOUNCE':
+                print("Annonce d'arrêt du serveur reçue.")
+                conn.send("Arrêt du serveur confirmé.".encode())
+                time.sleep(15)  # Attendre 15 secondes avant d'arrêter le serveur
+                os._exit(0)
             else:
                 conn.send("Commande non reconnue.".encode())
 
@@ -87,7 +103,7 @@ def acceuil_client(conn, address):
                     print("Client a demandé l'arrêt du serveur.")
                     conn.send("Arrêt du serveur.".encode())
                     conn.close()
-                    schedule_server_shutdown()
+                    os._exit(0)
                 elif message.lower() == 'bye':
                     print(f"Le client {username} a demandé à se déconnecter.")
                     conn.send("Déconnexion demandée.".encode())
