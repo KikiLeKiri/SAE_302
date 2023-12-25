@@ -1,6 +1,7 @@
 import sys
 import socket
 import threading
+from PyQt6 import QtCore
 from PyQt6.QtWidgets import *
 
 class AuthenticationDialog(QDialog):
@@ -32,6 +33,7 @@ class AuthenticationDialog(QDialog):
         return self.username_input.text(), self.password_input.text()
 
 class ClientGUI(QWidget):
+    close_signal = QtCore.pyqtSignal()
     def __init__(self):
         super().__init__()
 
@@ -105,12 +107,18 @@ class ClientGUI(QWidget):
                     self.text_display.append("Compte créé avec succès.")
                 elif message.startswith("CREATE_ACCOUNT_FAILURE"):
                     self.text_display.append("Erreur lors de la création du compte.")
+                elif message.startswith("Serveur:"):
+                    self.text_display.append(message)
+                    if "Le serveur s'arrête maintenant" in message:
+                        # Émettre le signal pour fermer l'application
+                        self.close_signal.emit()
                 else:
                     self.text_display.append(message)
 
             except Exception as e:
                 self.text_display.append(f"Erreur de réception de message")
                 break
+
 
     def disconnect_from_server(self):
         try:
@@ -124,4 +132,8 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     client_gui = ClientGUI()
     client_gui.show()
+
+    # Connecter le signal de fermeture au slot quit de l'application
+    client_gui.close_signal.connect(app.quit)
+
     sys.exit(app.exec())
