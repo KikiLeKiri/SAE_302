@@ -1,10 +1,8 @@
 import socket
 import threading
 import os
-import hashlib
 import mysql.connector
 from mysql.connector import Error
-import time
 
 DB_HOST = 'localhost'
 DB_USER = 'toto'
