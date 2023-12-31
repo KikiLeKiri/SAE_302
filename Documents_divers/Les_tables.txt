@@ -31,3 +31,11 @@ CREATE TABLE Messages (
     FOREIGN KEY (ID_Utilisateur) REFERENCES Utilisateurs(ID_Utilisateur),
     FOREIGN KEY (ID_Salon) REFERENCES Salons(ID_Salon)
 );
+
+
+
+INSERT INTO Salons (ID_Salon, Nom_Salon) VALUES (1, 'Général');
+INSERT INTO Salons (ID_Salon, Nom_Salon) VALUES (2, 'Blabla');
+INSERT INTO Salons (ID_Salon, Nom_Salon) VALUES (3, 'Comptabilité');
+INSERT INTO Salons (ID_Salon, Nom_Salon) VALUES (4, 'Informatique');
+INSERT INTO Salons (ID_Salon, Nom_Salon) VALUES (5, 'Marketing');

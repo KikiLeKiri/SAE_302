@@ -2,7 +2,8 @@ import sys
 import socket
 import threading
 from PyQt6 import QtCore
-from PyQt6.QtWidgets import QApplication, QWidget, QTextEdit, QLineEdit, QPushButton, QVBoxLayout, QGridLayout, QLabel, QDialog
+from PyQt6.QtCore import Qt, QCoreApplication
+from PyQt6.QtWidgets import QApplication, QWidget, QTextEdit, QLineEdit, QPushButton, QVBoxLayout, QGridLayout, QLabel, QDialog, QComboBox
 
 class AuthenticationDialog(QDialog):
     def __init__(self):
@@ -36,7 +37,8 @@ class ClientGUI(QWidget):
     close_signal = QtCore.pyqtSignal()
     ban_signal = QtCore.pyqtSignal()
     create_account_signal = QtCore.pyqtSignal(str, str)  # Signal pour créer un compte
-
+    room_change_signal = QtCore.pyqtSignal(str)  # Signal pour changer de salon
+    
     def __init__(self):
         super().__init__()
 
@@ -60,6 +62,10 @@ class ClientGUI(QWidget):
         self.quit_button = QPushButton("Quitter", self)
         self.quit_button.clicked.connect(self.disconnect_from_server)
 
+        self.room_list_label = QLabel("Salons disponibles:", self)
+        self.room_list = QComboBox(self)
+        self.room_list.currentIndexChanged.connect(self.join_room)
+
         layout = QGridLayout(self)
         layout.addWidget(self.text_display, 0, 0, 1, 4)
         layout.addWidget(self.input_box, 1, 0, 1, 4)
@@ -67,6 +73,8 @@ class ClientGUI(QWidget):
         layout.addWidget(self.create_account_button, 3, 0)
         layout.addWidget(self.authenticate_button, 3, 1)
         layout.addWidget(self.quit_button, 3, 2, 1, 2)
+        layout.addWidget(self.room_list_label, 0, 4)
+        layout.addWidget(self.room_list, 1, 4, 1, 1)
 
         self.server_address = ('127.0.0.1', 8864)
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -81,11 +89,14 @@ class ClientGUI(QWidget):
 
         # Connecter le signal de création de compte au slot correspondant
         self.create_account_signal.connect(self.send_create_account_request)
+        # Connecter le signal de changement de salon au slot correspondant
+        self.room_change_signal.connect(self.change_room)
 
     def send_message(self):
         message = self.input_box.text()
         self.client_socket.send(message.encode())
         self.input_box.clear()
+        self.text_display.append(f"Vous: {message}")
 
     def create_account_dialog(self):
         auth_dialog = AuthenticationDialog()
@@ -112,8 +123,8 @@ class ClientGUI(QWidget):
         while True:
             try:
                 message = self.client_socket.recv(1024).decode()
+                print(f"Message reçu: {message}")
 
-                # Décoder les messages et traiter en conséquence
                 if message.startswith("CREATE_ACCOUNT_SUCCESS"):
                     self.text_display.append("Compte créé avec succès.")
                 elif message.startswith("CREATE_ACCOUNT_FAILURE"):
@@ -123,17 +134,25 @@ class ClientGUI(QWidget):
                     if "Le serveur s'arrête maintenant" in message:
                         # Émettre le signal pour fermer l'application
                         self.close_signal.emit()
+                        print("Fermeture de l'application signalée")
                 elif message.startswith("Banni:"):
                     # Le serveur indique que l'utilisateur est banni
                     self.text_display.append("Vous avez été banni du serveur.")
                     # Émettre le signal pour fermer l'application
                     self.ban_signal.emit()
+                    print("Fermeture de l'application signalée (banni)")
+                elif message.startswith("ROOM_LIST"):
+                    # Mise à jour de la liste des salons
+                    room_list = message.split("|")[1:]
+                    print(f"Liste des salons reçue du serveur: {room_list}")
+                    self.update_room_list(room_list)
                 else:
                     self.text_display.append(message)
 
             except Exception as e:
-                self.text_display.append(f"Erreur de réception de message")
+                print(f"Erreur de réception de message: {e}")
                 break
+
 
     def disconnect_from_server(self):
         try:
@@ -157,13 +176,28 @@ class ClientGUI(QWidget):
 
             if response == "CREATE_ACCOUNT_SUCCESS":
                 self.text_display.append("Compte créé avec succès.")
-            else:
-                self.text_display.append("Erreur lors de la création du compte.")
+
+            # Mettre à jour l'interface graphique
+            QCoreApplication.processEvents()
 
         except Exception as e:
             self.text_display.append(f"Erreur lors de la création du compte: {e}")
 
+    def join_room(self):
+        # Émettre le signal pour changer de salon
+        selected_room = self.room_list.currentText()
+        self.room_change_signal.emit(selected_room)
 
+    def change_room(self, room_name):
+        # Exemple de traitement pour le changement de salle
+        self.text_display.append(f"Vous avez rejoint le salon : {room_name}")
+        # Mettez à jour l'interface utilisateur ou effectuez d'autres opérations nécessaires
+    
+    def update_room_list(self, room_list):
+        # Mettre à jour la liste déroulante des salons
+        self.room_list.clear()
+        self.room_list.addItems(room_list)
+        
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     client_gui = ClientGUI()

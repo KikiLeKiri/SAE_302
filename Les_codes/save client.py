@@ -2,8 +2,7 @@ import sys
 import socket
 import threading
 from PyQt6 import QtCore
-from PyQt6.QtCore import Qt, QCoreApplication
-from PyQt6.QtWidgets import QApplication, QWidget, QTextEdit, QLineEdit, QPushButton, QVBoxLayout, QGridLayout, QLabel, QDialog, QComboBox
+from PyQt6.QtWidgets import QApplication, QWidget, QTextEdit, QLineEdit, QPushButton, QVBoxLayout, QGridLayout, QLabel, QDialog
 
 class AuthenticationDialog(QDialog):
     def __init__(self):
@@ -61,10 +60,6 @@ class ClientGUI(QWidget):
         self.quit_button = QPushButton("Quitter", self)
         self.quit_button.clicked.connect(self.disconnect_from_server)
 
-        self.room_list_label = QLabel("Salons disponibles:", self)
-        self.room_list = QComboBox(self)
-        self.room_list.currentIndexChanged.connect(self.join_room)
-
         layout = QGridLayout(self)
         layout.addWidget(self.text_display, 0, 0, 1, 4)
         layout.addWidget(self.input_box, 1, 0, 1, 4)
@@ -72,8 +67,6 @@ class ClientGUI(QWidget):
         layout.addWidget(self.create_account_button, 3, 0)
         layout.addWidget(self.authenticate_button, 3, 1)
         layout.addWidget(self.quit_button, 3, 2, 1, 2)
-        layout.addWidget(self.room_list_label, 0, 4)
-        layout.addWidget(self.room_list, 1, 4, 1, 1)
 
         self.server_address = ('127.0.0.1', 8864)
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -119,9 +112,6 @@ class ClientGUI(QWidget):
         while True:
             try:
                 message = self.client_socket.recv(1024).decode()
-                if not message:
-                    print("La connexion avec le serveur a été fermée.")
-                    break
 
                 # Décoder les messages et traiter en conséquence
                 if message.startswith("CREATE_ACCOUNT_SUCCESS"):
@@ -138,22 +128,11 @@ class ClientGUI(QWidget):
                     self.text_display.append("Vous avez été banni du serveur.")
                     # Émettre le signal pour fermer l'application
                     self.ban_signal.emit()
-                elif message.startswith("ROOM_LIST"):
-                    # Mise à jour de la liste des salons
-                    room_list = message.split("|")[1:]
-                    self.room_list.clear()
-                    self.room_list.addItems(room_list)
-                    # Sélectionner le salon actuel de l'utilisateur
-                    current_room_name = message.split("|")[0]
-                    if current_room_name in [self.room_list.itemText(i) for i in range(self.room_list.count())]:
-                        current_room_index = self.room_list.findText(current_room_name)
-                        self.room_list.setCurrentIndex(current_room_index)
-
                 else:
                     self.text_display.append(message)
 
             except Exception as e:
-                print(f"Erreur de réception de message: {e}")
+                self.text_display.append(f"Erreur de réception de message")
                 break
 
     def disconnect_from_server(self):
@@ -178,16 +157,12 @@ class ClientGUI(QWidget):
 
             if response == "CREATE_ACCOUNT_SUCCESS":
                 self.text_display.append("Compte créé avec succès.")
-
-            # Mettre à jour l'interface graphique
-            QCoreApplication.processEvents()
+            else:
+                self.text_display.append("Erreur lors de la création du compte.")
 
         except Exception as e:
             self.text_display.append(f"Erreur lors de la création du compte: {e}")
 
-    def join_room(self, index):
-        selected_room = self.room_list.currentText()
-        self.client_socket.send(f"JOIN_ROOM|{selected_room}".encode())
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
