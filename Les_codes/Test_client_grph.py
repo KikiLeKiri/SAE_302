@@ -2,6 +2,7 @@ import sys
 import socket
 import threading
 from PyQt6 import QtCore
+from PyQt6.QtCore import QCoreApplication
 from PyQt6.QtWidgets import QApplication, QWidget, QTextEdit, QLineEdit, QPushButton, QVBoxLayout, QGridLayout, QLabel, QDialog
 
 class AuthenticationDialog(QDialog):
@@ -157,8 +158,9 @@ class ClientGUI(QWidget):
 
             if response == "CREATE_ACCOUNT_SUCCESS":
                 self.text_display.append("Compte créé avec succès.")
-            else:
-                self.text_display.append("Erreur lors de la création du compte.")
+
+            # Mettre à jour l'interface graphique
+            QCoreApplication.processEvents()
 
         except Exception as e:
             self.text_display.append(f"Erreur lors de la création du compte: {e}")
