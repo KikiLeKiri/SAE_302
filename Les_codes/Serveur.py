@@ -29,7 +29,7 @@ def start_server():
         client_thread = threading.Thread(target=acceuil_client, args=(conn, address))
         client_thread.start()
 
-    # Nouvelle commande pour annoncer l'arrêt du serveur
+    # commande pour annoncer l'arrêt du serveur
     announce_shutdown("Le serveur va s'arrêter dans 15 secondes.")
 
 def announce_shutdown(message):
@@ -42,21 +42,29 @@ def announce_shutdown(message):
 def acceuil_client(conn, address):
     Flag = False
     username = None
+    creating_account = False
 
     print(f"Connexion établie avec {address}")
 
+    if not creating_account:
+        conn.send("Veuillez vous connecter ou créer un compte.\n".encode())
+
     while not Flag and username is None:
         try:
-            conn.send("Veuillez vous connecter ou créer un compte.\n".encode())
-
             message = conn.recv(1024).decode()
             command_parts = message.split("|")
 
-            if command_parts[0] == 'CREATE_ACCOUNT':
-                # Création de compte
-                username, password = create_account(conn)
+            if command_parts[0] == 'CREATE_ACCOUNT_TRIGGER' and not creating_account:
+                creating_account = True
+                username, password = command_parts[1], command_parts[2]
+                creating_account = False
+
                 if username is not None and password is not None:
-                    conn.send("CREATE_ACCOUNT_SUCCESS".encode())
+                    # Enregistrez l'utilisateur dans la base de données
+                    if save_user_to_database(username, password):
+                        conn.send("CREATE_ACCOUNT_SUCCESS".encode())
+                    else:
+                        conn.send("CREATE_ACCOUNT_FAILURE".encode())
                 else:
                     conn.send("CREATE_ACCOUNT_FAILURE".encode())
             elif command_parts[0] == 'AUTHENTICATE':
@@ -65,13 +73,13 @@ def acceuil_client(conn, address):
                 if is_valid_password(username, password):
                     # Ajoutez cette vérification avant d'authentifier l'utilisateur
                     if not is_user_banned(username):
-                        conn.send("Connection réussi".encode())
+                        conn.send("Connection réussie".encode())
                     else:
                         conn.send("Vous êtes banni. Déconnexion.".encode())
                         conn.close()
                         Flag = True
                 else:
-                    conn.send("Il y a eu un problème lors de votre conncetion au serveur\nVeuillez réessayez".encode())
+                    conn.send("Il y a eu un problème lors de votre connexion au serveur\nVeuillez réessayer".encode())
             elif command_parts[0] == 'QUIT':
                 # Quitter
                 conn.send("Déconnexion demandée.".encode())
@@ -94,8 +102,7 @@ def acceuil_client(conn, address):
                     Flag = True
 
         except Exception as e:
-            print(f"Le client {address} s'est déconnecté")
-            clients.remove(conn)
+            print(f"Le client {address} s'est déconnecté. Erreur : {e}")
             Flag = True
 
     if username is not None:
@@ -133,29 +140,30 @@ def acceuil_client(conn, address):
 
 def authenticate_user(conn):
     try:
-        conn.send("Authentification\nNom d'utilisateur: ".encode())
-        username = conn.recv(1024).decode()
+        username = None
 
-        # Vérifier l'existence de l'utilisateur dans la base de données
-        if is_valid_user(username):
-            # Vérifier si l'utilisateur est banni
-            if is_user_banned(username):
-                conn.send("Vous êtes banni. Déconnexion.".encode())
-                conn.close()
-                return None
+        # Vérifier si l'utilisateur est banni
+        while username is None or is_user_banned(username):
+            conn.send("Authentification\nNom d'utilisateur: ".encode())
+            username = conn.recv(1024).decode()
 
-            conn.send("Mot de passe: ".encode())
-            password = conn.recv(1024).decode()
+            # Vérifier l'existence de l'utilisateur dans la base de données
+            if is_valid_user(username):
+                if is_user_banned(username):
+                    conn.send("Vous êtes banni. Déconnexion.".encode())
+                    conn.close()
+                    return None
 
-            # Vérifier le mot de passe dans la base de données
-            if is_valid_password(username, password):
-                return username
+                conn.send("Mot de passe: ".encode())
+                password = conn.recv(1024).decode()
+
+                # Vérifier le mot de passe dans la base de données
+                if is_valid_password(username, password):
+                    return username
+                else:
+                    conn.send("Mot de passe incorrect.".encode())
             else:
-                conn.send("Mot de passe incorrect.".encode())
-                return None
-        else:
-            conn.send("Nom d'utilisateur incorrect.".encode())
-            return None
+                conn.send("Nom d'utilisateur incorrect.".encode())
 
     except Exception as e:
         print(f"Erreur lors de l'authentification de l'utilisateur: {e}")
@@ -163,31 +171,32 @@ def authenticate_user(conn):
 
 def create_account(conn):
     try:
-        conn.send("Création de compte\nNom d'utilisateur: ".encode())
-        username = conn.recv(1024).decode()
+        username, password = None, None
 
         # Vérifier si l'utilisateur existe déjà
-        if is_valid_user(username):
-            conn.send("Nom d'utilisateur déjà pris.".encode())
-            return None, None
+        while username is None or is_valid_user(username):
+            username = conn.recv(1024).decode()
 
-        conn.send("Mot de passe: ".encode())
-        password = conn.recv(1024).decode()
+            if is_valid_user(username):
+                conn.send("Nom d'utilisateur déjà pris.".encode())
+            else:
+                conn.send("Mot de passe: ".encode())
+                password = conn.recv(1024).decode()
 
-        # Enregistrer l'utilisateur dans la base de données
-        if save_user_to_database(username, password):
-            conn.send("Compte créé avec succès.".encode())
-            return username, password
-        else:
-            conn.send("Erreur lors de la création du compte.".encode())
-            return None, None
+                # Enregistrer l'utilisateur dans la base de données
+                if save_user_to_database(username, password):
+                    return username, password
+                else:
+                    conn.send("CREATE_ACCOUNT_FAILURE".encode())
 
     except Exception as e:
         print(f"Erreur lors de la création de compte: {e}")
         return None, None
 
+
+
+# Ajouter ces fonctions pour gérer la base de données
 def is_valid_user(username):
-    # Vérifier si l'utilisateur existe dans la base de données
     try:
         connection = mysql.connector.connect(
             host=DB_HOST,
@@ -255,7 +264,6 @@ def is_user_banned(username):
         return False
 
 def save_user_to_database(username, password):
-    # Enregistrer l'utilisateur dans la base de données
     try:
         connection = mysql.connector.connect(
             host=DB_HOST,

@@ -35,6 +35,7 @@ class AuthenticationDialog(QDialog):
 class ClientGUI(QWidget):
     close_signal = QtCore.pyqtSignal()
     ban_signal = QtCore.pyqtSignal()
+    create_account_signal = QtCore.pyqtSignal(str, str)  # Signal pour créer un compte
 
     def __init__(self):
         super().__init__()
@@ -51,7 +52,7 @@ class ClientGUI(QWidget):
         self.send_button.clicked.connect(self.send_message)
 
         self.create_account_button = QPushButton("Créer un compte", self)
-        self.create_account_button.clicked.connect(self.create_account)
+        self.create_account_button.clicked.connect(self.create_account_dialog)
 
         self.authenticate_button = QPushButton("Se connecter", self)
         self.authenticate_button.clicked.connect(self.authenticate)
@@ -78,14 +79,23 @@ class ClientGUI(QWidget):
         except Exception as e:
             self.text_display.append(f"Erreur de connexion au serveur")
 
+        # Connecter le signal de création de compte au slot correspondant
+        self.create_account_signal.connect(self.send_create_account_request)
+
     def send_message(self):
         message = self.input_box.text()
         self.client_socket.send(message.encode())
         self.input_box.clear()
 
-    def create_account(self):
-        # Envoyer la commande au serveur pour créer un compte
-        self.client_socket.send("CREATE_ACCOUNT".encode())
+    def create_account_dialog(self):
+        auth_dialog = AuthenticationDialog()
+        result = auth_dialog.exec()
+
+        if result == QDialog.DialogCode.Accepted:
+            username, password = auth_dialog.get_credentials()
+
+            # Émettre le signal pour créer un compte
+            self.create_account_signal.emit(username, password)
 
     def authenticate(self):
         # Utiliser la fenêtre de dialogue pour obtenir les informations d'authentification
@@ -136,6 +146,23 @@ class ClientGUI(QWidget):
     def handle_ban(self):
         # Fermer la fenêtre de discussion en cas de bannissement
         self.close()
+
+    def send_create_account_request(self, username, password):
+        try:
+            # Envoyer la commande au serveur pour créer un compte
+            self.client_socket.send(f"CREATE_ACCOUNT_TRIGGER|{username}|{password}".encode())
+
+            # Attendre la réponse du serveur pour la création du compte
+            response = self.client_socket.recv(1024).decode()
+
+            if response == "CREATE_ACCOUNT_SUCCESS":
+                self.text_display.append("Compte créé avec succès.")
+            else:
+                self.text_display.append("Erreur lors de la création du compte.")
+
+        except Exception as e:
+            self.text_display.append(f"Erreur lors de la création du compte: {e}")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
