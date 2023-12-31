@@ -40,6 +40,9 @@ def announce_shutdown(message):
             print(f"Erreur d'envoi d'annonce d'arrêt du serveur à un client: {e}")
 
 def acceuil_client(conn, address):
+    global authenticated_clients
+    global clients
+
     Flag = False
     username = None
     creating_account = False
@@ -101,6 +104,9 @@ def acceuil_client(conn, address):
                     conn.close()
                     Flag = True
 
+                # Ajoutez cette impression pour débogage
+                print(f"Message reçu du client {address}: {message}")
+
         except Exception as e:
             print(f"Le client {address} s'est déconnecté. Erreur : {e}")
             Flag = True
@@ -109,6 +115,9 @@ def acceuil_client(conn, address):
         authenticated_clients[username] = conn
         conn.send("Bienvenue sur Discussion, votre serveur de discussion interne !".encode())
 
+        room_list = get_room_list()
+        conn.send(f"ROOM_LIST|{'|'.join(room_list)}".encode())
+        
         while not Flag:
             try:
                 message = conn.recv(1024).decode()
@@ -323,6 +332,9 @@ def Communication(message, sender_conn, username):
                         print(f"Erreur d'envoi de message à un client: {e}")
                         authenticated_clients.pop(username, None)
 
+            # Enregistrez le message dans la base de données
+            save_message_to_database(username, "Général", message)
+
 def kick_user(target_username, sender_conn):
     # Vérifier si l'utilisateur cible est connecté
     if target_username in authenticated_clients:
@@ -379,6 +391,88 @@ def broadcast_to_clients(message):
             client_conn.send(message.encode())
         except Exception as e:
             print(f"Erreur d'envoi de message à un client: {e}")
+
+def get_room_list():
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_DATABASE
+        )
+
+        cursor = connection.cursor()
+        cursor.execute("SELECT Nom_Salon FROM Salons")
+        room_list = [row[0] for row in cursor.fetchall()]
+
+        cursor.close()
+        connection.close()
+
+        return room_list
+
+    except Error as e:
+        print(f"Erreur lors de la récupération de la liste des salons: {e}")
+        return []
+
+def join_room(username, room_name):
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_DATABASE
+        )
+
+        cursor = connection.cursor()
+        cursor.execute("SELECT ID_Salon FROM Salons WHERE Nom_Salon = %s", (room_name,))
+        room_id = cursor.fetchone()[0]
+
+        # Insérer l'utilisateur dans la table Utilisateurs_Salons
+        cursor.execute("INSERT INTO Utilisateurs_Salons (ID_Utilisateur, ID_Salon) VALUES "
+                        "((SELECT ID_Utilisateur FROM Utilisateurs WHERE Nom_Utilisateur = %s), %s)",
+                        (username, room_id))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        return True
+
+    except Error as e:
+        print(f"Erreur lors de l'adhésion à un salon: {e}")
+        return False
+
+def save_message_to_database(username, room_name, content):
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_DATABASE
+        )
+
+        cursor = connection.cursor()
+
+        # Récupérer l'ID_Utilisateur et l'ID_Salon en fonction du nom d'utilisateur et du nom du salon
+        cursor.execute("SELECT ID_Utilisateur FROM Utilisateurs WHERE Nom_Utilisateur = %s", (username,))
+        user_id = cursor.fetchone()[0]
+
+        cursor.execute("SELECT ID_Salon FROM Salons WHERE Nom_Salon = %s", (room_name,))
+        room_id = cursor.fetchone()[0]
+
+        # Insérer le message dans la table Messages
+        cursor.execute("INSERT INTO Messages (ID_Utilisateur, ID_Salon, Contenu_Message, Date_Heure_Envoi) "
+                       "VALUES (%s, %s, %s, NOW())", (user_id, room_id, content))
+
+        connection.commit()
+
+        cursor.close()
+        connection.close()
+
+        return True
+
+    except Error as e:
+        print(f"Erreur lors de l'enregistrement du message dans la base de données: {e}")
+        return False
+
 
 if __name__ == "__main__":
     start_server()

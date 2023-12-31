@@ -23,7 +23,7 @@ CREATE TABLE Utilisateurs_Salons (
 
 
 CREATE TABLE Messages (
-    ID_Message INT PRIMARY KEY,
+    ID_Message INT PRIMARY KEY AUTO_INCREMENT,
     ID_Utilisateur INT,
     ID_Salon INT,
     Contenu_Message TEXT,

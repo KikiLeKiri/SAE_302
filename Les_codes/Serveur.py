@@ -332,6 +332,9 @@ def Communication(message, sender_conn, username):
                         print(f"Erreur d'envoi de message à un client: {e}")
                         authenticated_clients.pop(username, None)
 
+            # Enregistrez le message dans la base de données
+            save_message_to_database(username, "Général", message)
+
 def kick_user(target_username, sender_conn):
     # Vérifier si l'utilisateur cible est connecté
     if target_username in authenticated_clients:
@@ -435,6 +438,39 @@ def join_room(username, room_name):
 
     except Error as e:
         print(f"Erreur lors de l'adhésion à un salon: {e}")
+        return False
+
+def save_message_to_database(username, room_name, content):
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_DATABASE
+        )
+
+        cursor = connection.cursor()
+
+        # Récupérer l'ID_Utilisateur et l'ID_Salon en fonction du nom d'utilisateur et du nom du salon
+        cursor.execute("SELECT ID_Utilisateur FROM Utilisateurs WHERE Nom_Utilisateur = %s", (username,))
+        user_id = cursor.fetchone()[0]
+
+        cursor.execute("SELECT ID_Salon FROM Salons WHERE Nom_Salon = %s", (room_name,))
+        room_id = cursor.fetchone()[0]
+
+        # Insérer le message dans la table Messages
+        cursor.execute("INSERT INTO Messages (ID_Utilisateur, ID_Salon, Contenu_Message, Date_Heure_Envoi) "
+                       "VALUES (%s, %s, %s, NOW())", (user_id, room_id, content))
+
+        connection.commit()
+
+        cursor.close()
+        connection.close()
+
+        return True
+
+    except Error as e:
+        print(f"Erreur lors de l'enregistrement du message dans la base de données: {e}")
         return False
 
 
