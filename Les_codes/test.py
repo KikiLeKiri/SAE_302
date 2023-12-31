@@ -94,10 +94,14 @@ class ClientGUI(QWidget):
 
     def send_message(self):
         message = self.input_box.text()
-        self.client_socket.send(message.encode())
-        self.input_box.clear()
+        # Envoyer le message au serveur
+        try:
+            self.client_socket.send(message.encode())
+        except Exception as e:
+            print(f"Erreur lors de l'envoi du message au serveur: {e}")
         self.text_display.append(f"Vous: {message}")
-
+        self.input_box.clear()
+        
     def create_account_dialog(self):
         auth_dialog = AuthenticationDialog()
         result = auth_dialog.exec()
@@ -156,6 +160,8 @@ class ClientGUI(QWidget):
 
     def disconnect_from_server(self):
         try:
+            # Envoyer la commande de déconnexion au serveur
+            self.client_socket.send("QUIT".encode())
             self.client_socket.close()
             self.text_display.append("Déconnecté du serveur.")
         except Exception as e:
