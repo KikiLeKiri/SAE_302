@@ -129,8 +129,13 @@ class ClientGUI(QWidget):
                 message = self.client_socket.recv(1024).decode()
                 print(f"Message reçu: {message}")
 
-                if message.startswith("CREATE_ACCOUNT_SUCCESS"):
+                if message.startswith("Connection réussie"):
+                    # L'utilisateur est connecté avec succès
+                    self.text_display.append("Connexion réussie.")
+                elif message.startswith("CREATE_ACCOUNT_SUCCESS"):
                     self.text_display.append("Compte créé avec succès.")
+                elif message.startswith("Il y a eu un problème lors de votre connexion au serveur"):
+                    self.text_display.append(message)
                 elif message.startswith("CREATE_ACCOUNT_FAILURE"):
                     self.text_display.append("Erreur lors de la création du compte.")
                 elif message.startswith("Serveur:"):

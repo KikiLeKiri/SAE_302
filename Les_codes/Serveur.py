@@ -1,6 +1,7 @@
 import socket
 import threading
 import os
+import hashlib
 import mysql.connector
 from mysql.connector import Error
 import time
@@ -49,63 +50,84 @@ def acceuil_client(conn, address):
 
     print(f"Connexion établie avec {address}")
 
-    if not creating_account:
-        conn.send("Veuillez vous connecter ou créer un compte.\n".encode())
+    conn.send("Veuillez vous connecter ou créer un compte.\n".encode())
 
     while not Flag and username is None:
         try:
             message = conn.recv(1024).decode()
             command_parts = message.split("|")
 
-            if command_parts[0] == 'CREATE_ACCOUNT_TRIGGER' and not creating_account:
-                creating_account = True
-                username, password = command_parts[1], command_parts[2]
-                creating_account = False
+            if username is None:
+                if command_parts[0] == 'AUTHENTICATE':
+                    # Authentification
+                    username, password = command_parts[1], command_parts[2]
+                    if is_valid_password(username, password):
+                        # Ajoutez cette vérification avant d'authentifier l'utilisateur
+                        if not is_user_banned(username):
+                            conn.send("Connection réussie".encode())
+                            authenticated_clients[username] = conn
+                            room_list = get_room_list()
+                            conn.send(f"ROOM_LIST|{'|'.join(room_list)}".encode())
+                        else:
+                            conn.send("Vous êtes banni. Déconnexion.".encode())
+                            conn.close()
+                            Flag = True
+                    else:
+                        conn.send("Il y a eu un problème lors de votre connexion au serveur\nVeuillez réessayer".encode())
+                        username = None  # Réinitialiser le nom d'utilisateur pour éviter le message de bienvenue
+                elif command_parts[0] == 'CREATE_ACCOUNT_TRIGGER' and not creating_account:
+                    creating_account = True
+                    username, password = command_parts[1], command_parts[2]
+                    creating_account = False
 
-                if username is not None and password is not None:
-                    # Enregistrez l'utilisateur dans la base de données
-                    if save_user_to_database(username, password):
-                        conn.send("CREATE_ACCOUNT_SUCCESS".encode())
+                    if username is not None and password is not None:
+                        # Enregistrez l'utilisateur dans la base de données
+                        if save_user_to_database(username, password):
+                            conn.send("CREATE_ACCOUNT_SUCCESS".encode())
+                        else:
+                            conn.send("CREATE_ACCOUNT_FAILURE".encode())
                     else:
                         conn.send("CREATE_ACCOUNT_FAILURE".encode())
                 else:
-                    conn.send("CREATE_ACCOUNT_FAILURE".encode())
-            elif command_parts[0] == 'AUTHENTICATE':
-                # Authentification
-                username, password = command_parts[1], command_parts[2]
-                if is_valid_password(username, password):
-                    # Ajoutez cette vérification avant d'authentifier l'utilisateur
-                    if not is_user_banned(username):
-                        conn.send("Connection réussie".encode())
-                    else:
-                        conn.send("Vous êtes banni. Déconnexion.".encode())
-                        conn.close()
-                        Flag = True
-                else:
-                    conn.send("Il y a eu un problème lors de votre connexion au serveur\nVeuillez réessayer".encode())
-            elif command_parts[0] == 'QUIT':
-                # Quitter
-                conn.send("Déconnexion demandée.".encode())
-                conn.close()
-                clients.remove(conn)
-                authenticated_clients.pop(username, None)
-                Flag = True
-            elif command_parts[0] == 'SHUTDOWN_ANNOUNCE':
-                print("Annonce d'arrêt du serveur reçue.")
-                conn.send("Arrêt du serveur confirmé.".encode())
-                time.sleep(15)  # Attendre 15 secondes avant d'arrêter le serveur
-                os._exit(0)
-            else:
-                # Ajoutez cette vérification avant de traiter la commande
-                if not is_user_banned(username):
-                    conn.send("Commande non reconnue.".encode())
-                else:
-                    conn.send("Vous êtes banni. Déconnexion.".encode())
-                    conn.close()
-                    Flag = True
+                    conn.send("Veuillez vous connecter ou créer un compte.\n".encode())
 
-                # Ajoutez cette impression pour débogage
-                print(f"Message reçu du client {address}: {message}")
+            elif username is not None:
+                authenticated_clients[username] = conn
+                # Envoyer le message de bienvenue seulement une fois lors de l'authentification
+                if 'ROOM_LIST' not in message:
+                    conn.send("Bienvenue sur Discussion, votre serveur de discussion interne !".encode())
+
+                    room_list = get_room_list()
+                    conn.send(f"ROOM_LIST|{'|'.join(room_list)}".encode())
+
+                while not Flag:
+                    try:
+                        message = conn.recv(1024).decode()
+                        if not message:
+                            print(f"Le client {username} s'est déconnecté.")
+                            conn.close()
+                            clients.remove(conn)
+                            authenticated_clients.pop(username, None)
+                            Flag = True
+                        elif message.lower() == 'arret':
+                            print("Client a demandé l'arrêt du serveur.")
+                            conn.send("Arrêt du serveur.".encode())
+                            conn.close()
+                            os._exit(0)
+                        elif message.lower() == 'bye':
+                            print(f"Le client {username} a demandé à se déconnecter.")
+                            conn.send("Déconnexion demandée.".encode())
+                            conn.close()
+                            clients.remove(conn)
+                            authenticated_clients.pop(username, None)
+                            Flag = True
+                        else:
+                            Communication(message, conn, username)
+                    except Exception as e:
+                        print(f"Le client {username} s'est déconnecté")
+                        clients.remove(conn)
+                        authenticated_clients.pop(username, None)
+                        Flag = True
 
         except Exception as e:
             print(f"Le client {address} s'est déconnecté. Erreur : {e}")
@@ -113,28 +135,18 @@ def acceuil_client(conn, address):
 
     if username is not None:
         authenticated_clients[username] = conn
-        conn.send("Bienvenue sur Discussion, votre serveur de discussion interne !".encode())
+        # Envoyer le message de bienvenue seulement une fois lors de l'authentification
+        if 'ROOM_LIST' not in message:
+            conn.send("Bienvenue sur Discussion, votre serveur de discussion interne !".encode())
 
-        room_list = get_room_list()
-        conn.send(f"ROOM_LIST|{'|'.join(room_list)}".encode())
-        
+            room_list = get_room_list()
+            conn.send(f"ROOM_LIST|{'|'.join(room_list)}".encode())
+
         while not Flag:
             try:
                 message = conn.recv(1024).decode()
                 if not message:
                     print(f"Le client {username} s'est déconnecté.")
-                    conn.close()
-                    clients.remove(conn)
-                    authenticated_clients.pop(username, None)
-                    Flag = True
-                elif message.lower() == 'arret':
-                    print("Client a demandé l'arrêt du serveur.")
-                    conn.send("Arrêt du serveur.".encode())
-                    conn.close()
-                    os._exit(0)
-                elif message.lower() == 'bye':
-                    print(f"Le client {username} a demandé à se déconnecter.")
-                    conn.send("Déconnexion demandée.".encode())
                     conn.close()
                     clients.remove(conn)
                     authenticated_clients.pop(username, None)
@@ -323,17 +335,17 @@ def Communication(message, sender_conn, username):
     else:
         # Ajoutez cette vérification avant d'envoyer le message aux clients
         if not is_user_banned(username):
-            # Envoyer le message aux clients
-            for client_conn in active_clients:
-                if client_conn != sender_conn:
-                    try:
-                        client_conn.send(f"{username}: {message}".encode())
-                    except Exception as e:
-                        print(f"Erreur d'envoi de message à un client: {e}")
-                        authenticated_clients.pop(username, None)
+                # Envoyer le message aux clients
+                for client_conn in active_clients:
+                    if client_conn != sender_conn:
+                        try:
+                            client_conn.send(f"{username}: {message}".encode())
+                        except Exception as e:
+                            print(f"Erreur d'envoi de message à un client: {e}")
+                            authenticated_clients.pop(username, None)
 
-            # Enregistrez le message dans la base de données
-            save_message_to_database(username, "Général", message)
+        # Enregistrez le message dans la base de données
+        save_message_to_database(username, "Général", message)
 
 def kick_user(target_username, sender_conn):
     # Vérifier si l'utilisateur cible est connecté
